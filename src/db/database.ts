@@ -1,35 +1,42 @@
 import Database from 'better-sqlite3';
 import { config } from '../utils/config';
 
-const db = new Database(config.dbPath);
+const db = new Database(config.database.path);
 
 db.pragma('journal_mode = WAL');
 
 export function initializeDatabase(): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
       email TEXT UNIQUE NOT NULL,
       password TEXT NOT NULL,
-      createdAt TEXT NOT NULL,
-      updatedAt TEXT NOT NULL
-    );
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 
+  db.exec(`
     CREATE TABLE IF NOT EXISTS tasks (
-      id TEXT PRIMARY KEY,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
       description TEXT,
-      status TEXT NOT NULL DEFAULT 'pending',
-      priority TEXT NOT NULL DEFAULT 'medium',
+      status TEXT CHECK(status IN ('pending', 'completed')) DEFAULT 'pending',
+      priority TEXT CHECK(priority IN ('low', 'medium', 'high')) DEFAULT 'medium',
       dueDate TEXT,
-      userId TEXT NOT NULL,
-      createdAt TEXT NOT NULL,
-      updatedAt TEXT NOT NULL,
+      userId INTEGER NOT NULL,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
-    );
+    )
+  `);
 
-    CREATE INDEX IF NOT EXISTS idx_tasks_userId ON tasks(userId);
-    CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_tasks_userId ON tasks(userId)
+  `);
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)
   `);
 }
 

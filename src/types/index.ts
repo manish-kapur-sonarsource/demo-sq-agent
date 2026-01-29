@@ -1,56 +1,30 @@
 import { Request } from 'express';
 
-export type TaskStatus = 'pending' | 'completed';
-export type TaskPriority = 'low' | 'medium' | 'high';
-
 export interface User {
-  id: string;
+  id: number;
   email: string;
   password: string;
   createdAt: string;
   updatedAt: string;
 }
 
+export type TaskStatus = 'pending' | 'completed';
+export type TaskPriority = 'low' | 'medium' | 'high';
+
 export interface Task {
-  id: string;
+  id: number;
   title: string;
   description: string | null;
   status: TaskStatus;
   priority: TaskPriority;
   dueDate: string | null;
-  userId: string;
+  userId: number;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface CreateTaskInput {
-  title: string;
-  description?: string;
-  status?: TaskStatus;
-  priority?: TaskPriority;
-  dueDate?: string;
-}
-
-export interface UpdateTaskInput {
-  title?: string;
-  description?: string;
-  status?: TaskStatus;
-  priority?: TaskPriority;
-  dueDate?: string;
-}
-
-export interface RegisterInput {
-  email: string;
-  password: string;
-}
-
-export interface LoginInput {
-  email: string;
-  password: string;
-}
-
 export interface JwtPayload {
-  userId: string;
+  userId: number;
   email: string;
 }
 

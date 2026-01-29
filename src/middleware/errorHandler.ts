@@ -1,30 +1,43 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
-import { AppError } from '../utils/errors';
-import { ApiResponse } from '../types';
+
+export class AppError extends Error {
+  constructor(
+    public statusCode: number,
+    message: string
+  ) {
+    super(message);
+    this.name = 'AppError';
+  }
+}
 
 export function errorHandler(
   err: Error,
-  _req: Request,
-  res: Response<ApiResponse>,
+  req: Request,
+  res: Response,
   _next: NextFunction
 ): void {
-  console.error('Error:', err);
-
-  if (err instanceof ZodError) {
-    const errors = err.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ');
-    res.status(400).json({
-      success: false,
-      error: 'Validation error',
-      message: errors,
-    });
-    return;
-  }
+  console.error(`[ERROR] ${new Date().toISOString()} - ${err.message}`);
+  console.error(err.stack);
 
   if (err instanceof AppError) {
     res.status(err.statusCode).json({
       success: false,
       error: err.message,
+    });
+    return;
+  }
+
+  if (err instanceof ZodError) {
+    const errors = err.errors.map((e) => ({
+      field: e.path.join('.'),
+      message: e.message,
+    }));
+    
+    res.status(400).json({
+      success: false,
+      error: 'Validation failed',
+      details: errors,
     });
     return;
   }

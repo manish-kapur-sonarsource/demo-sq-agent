@@ -1,26 +1,31 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { config } from '../utils/config';
+import { createUser, getUserByEmail } from '../db/userRepository';
 import { registerSchema, loginSchema } from '../utils/validation';
-import { BadRequestError, ConflictError, UnauthorizedError } from '../utils/errors';
-import { userRepository } from '../db/userRepository';
-import { ApiResponse, JwtPayload } from '../types';
+import { config } from '../utils/config';
+import { AppError } from '../middleware/errorHandler';
+import { JwtPayload } from '../types';
 
 const router = Router();
 
 router.post(
   '/register',
-  async (req: Request, res: Response<ApiResponse>, next: NextFunction): Promise<void> => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const validatedData = registerSchema.parse(req.body);
-
-      if (userRepository.emailExists(validatedData.email)) {
-        throw new ConflictError('Email already registered');
+      
+      const existingUser = getUserByEmail(validatedData.email);
+      if (existingUser) {
+        throw new AppError(409, 'User with this email already exists');
       }
 
-      const hashedPassword = await bcrypt.hash(validatedData.password, config.bcryptRounds);
-      const user = userRepository.create(validatedData.email, hashedPassword);
+      const hashedPassword = await bcrypt.hash(
+        validatedData.password,
+        config.bcryptRounds
+      );
+
+      const user = createUser(validatedData.email, hashedPassword);
 
       const payload: JwtPayload = {
         userId: user.id,
@@ -51,18 +56,22 @@ router.post(
 
 router.post(
   '/login',
-  async (req: Request, res: Response<ApiResponse>, next: NextFunction): Promise<void> => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const validatedData = loginSchema.parse(req.body);
 
-      const user = userRepository.findByEmail(validatedData.email);
+      const user = getUserByEmail(validatedData.email);
       if (!user) {
-        throw new UnauthorizedError('Invalid email or password');
+        throw new AppError(401, 'Invalid email or password');
       }
 
-      const isPasswordValid = await bcrypt.compare(validatedData.password, user.password);
+      const isPasswordValid = await bcrypt.compare(
+        validatedData.password,
+        user.password
+      );
+
       if (!isPasswordValid) {
-        throw new UnauthorizedError('Invalid email or password');
+        throw new AppError(401, 'Invalid email or password');
       }
 
       const payload: JwtPayload = {

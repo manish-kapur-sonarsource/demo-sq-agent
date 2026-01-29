@@ -1,20 +1,26 @@
 import { Router, Response, NextFunction } from 'express';
-import { authenticate } from '../middleware/auth';
-import { createTaskSchema, updateTaskSchema, taskIdSchema } from '../utils/validation';
-import { NotFoundError } from '../utils/errors';
-import { taskRepository } from '../db/taskRepository';
-import { AuthenticatedRequest, ApiResponse } from '../types';
+import {
+  createTask,
+  getTasksByUserId,
+  getTaskById,
+  updateTask,
+  deleteTask,
+} from '../db/taskRepository';
+import { createTaskSchema, updateTaskSchema } from '../utils/validation';
+import { authMiddleware } from '../middleware/auth';
+import { AppError } from '../middleware/errorHandler';
+import { AuthenticatedRequest } from '../types';
 
 const router = Router();
 
-router.use(authenticate);
+router.use(authMiddleware);
 
 router.get(
   '/',
-  (req: AuthenticatedRequest, res: Response<ApiResponse>, next: NextFunction): void => {
+  (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
     try {
       const userId = req.user!.userId;
-      const tasks = taskRepository.findAllByUserId(userId);
+      const tasks = getTasksByUserId(userId);
 
       res.json({
         success: true,
@@ -28,17 +34,14 @@ router.get(
 
 router.post(
   '/',
-  (req: AuthenticatedRequest, res: Response<ApiResponse>, next: NextFunction): void => {
+  (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
     try {
-      const userId = req.user!.userId;
       const validatedData = createTaskSchema.parse(req.body);
+      const userId = req.user!.userId;
 
-      const task = taskRepository.create(userId, {
-        title: validatedData.title,
-        description: validatedData.description,
-        status: validatedData.status,
-        priority: validatedData.priority,
-        dueDate: validatedData.dueDate || undefined,
+      const task = createTask({
+        ...validatedData,
+        userId,
       });
 
       res.status(201).json({
@@ -54,18 +57,22 @@ router.post(
 
 router.put(
   '/:id',
-  (req: AuthenticatedRequest, res: Response<ApiResponse>, next: NextFunction): void => {
+  (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
     try {
-      const userId = req.user!.userId;
-      const { id } = taskIdSchema.parse(req.params);
-      const validatedData = updateTaskSchema.parse(req.body);
-
-      const existingTask = taskRepository.findByIdAndUserId(id, userId);
-      if (!existingTask) {
-        throw new NotFoundError('Task not found');
+      const taskId = parseInt(req.params.id, 10);
+      if (isNaN(taskId)) {
+        throw new AppError(400, 'Invalid task ID');
       }
 
-      const updatedTask = taskRepository.update(id, userId, validatedData);
+      const validatedData = updateTaskSchema.parse(req.body);
+      const userId = req.user!.userId;
+
+      const existingTask = getTaskById(taskId, userId);
+      if (!existingTask) {
+        throw new AppError(404, 'Task not found');
+      }
+
+      const updatedTask = updateTask(taskId, userId, validatedData);
 
       res.json({
         success: true,
@@ -80,15 +87,21 @@ router.put(
 
 router.delete(
   '/:id',
-  (req: AuthenticatedRequest, res: Response<ApiResponse>, next: NextFunction): void => {
+  (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
     try {
-      const userId = req.user!.userId;
-      const { id } = taskIdSchema.parse(req.params);
-
-      const deleted = taskRepository.delete(id, userId);
-      if (!deleted) {
-        throw new NotFoundError('Task not found');
+      const taskId = parseInt(req.params.id, 10);
+      if (isNaN(taskId)) {
+        throw new AppError(400, 'Invalid task ID');
       }
+
+      const userId = req.user!.userId;
+
+      const existingTask = getTaskById(taskId, userId);
+      if (!existingTask) {
+        throw new AppError(404, 'Task not found');
+      }
+
+      deleteTask(taskId, userId);
 
       res.json({
         success: true,
