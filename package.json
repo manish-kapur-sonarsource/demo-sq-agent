@@ -1,16 +1,16 @@
 {
   "name": "task-management-api",
   "version": "1.0.0",
-  "description": "REST API for task management with JWT authentication",
+  "description": "A REST API for task management with JWT authentication",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts"
   },
-  "keywords": ["api", "tasks", "express", "typescript"],
+  "keywords": ["task", "management", "api", "rest", "typescript"],
   "author": "",
-  "license": "MIT",
+  "license": "ISC",
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^9.4.3",

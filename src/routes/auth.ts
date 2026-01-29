@@ -1,11 +1,12 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { createUser, findUserByEmail, emailExists } from '../db/userRepository';
-import { hashPassword, comparePassword } from '../utils/password';
-import { generateToken } from '../utils/jwt';
-import { validate } from '../middleware/validate';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import { userRepository } from '../db/userRepository';
+import { config } from '../utils/config';
 import { registerSchema, loginSchema } from '../utils/validation';
-import { AppError } from '../middleware/errorHandler';
-import { ApiResponse } from '../types';
+import { validate } from '../middleware/validate';
+import { ConflictError, UnauthorizedError } from '../utils/errors';
+import { ApiResponse, JwtPayload } from '../types';
 
 const router = Router();
 
@@ -16,14 +17,15 @@ router.post(
     try {
       const { email, password } = req.body;
 
-      if (emailExists(email)) {
-        throw new AppError(409, 'Email already registered');
+      if (userRepository.exists(email)) {
+        throw new ConflictError('Email already registered');
       }
 
-      const hashedPassword = await hashPassword(password);
-      const user = createUser(email, hashedPassword);
+      const hashedPassword = await bcrypt.hash(password, config.bcryptSaltRounds);
+      const user = userRepository.create(email, hashedPassword);
 
-      const token = generateToken({ userId: user.id, email: user.email });
+      const payload: JwtPayload = { userId: user.id, email: user.email };
+      const token = jwt.sign(payload, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
 
       res.status(201).json({
         success: true,
@@ -50,17 +52,18 @@ router.post(
     try {
       const { email, password } = req.body;
 
-      const user = findUserByEmail(email);
+      const user = userRepository.findByEmail(email);
       if (!user) {
-        throw new AppError(401, 'Invalid email or password');
+        throw new UnauthorizedError('Invalid email or password');
       }
 
-      const isValidPassword = await comparePassword(password, user.password);
+      const isValidPassword = await bcrypt.compare(password, user.password);
       if (!isValidPassword) {
-        throw new AppError(401, 'Invalid email or password');
+        throw new UnauthorizedError('Invalid email or password');
       }
 
-      const token = generateToken({ userId: user.id, email: user.email });
+      const payload: JwtPayload = { userId: user.id, email: user.email };
+      const token = jwt.sign(payload, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
 
       res.json({
         success: true,
@@ -68,6 +71,7 @@ router.post(
           user: {
             id: user.id,
             email: user.email,
+            createdAt: user.createdAt,
           },
           token,
         },

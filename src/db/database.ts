@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { config } from '../utils/config';
 
-const db = new Database(config.dbPath);
+const db = new Database(config.databasePath);
 
 db.pragma('journal_mode = WAL');
 
@@ -33,4 +33,4 @@ export function initializeDatabase(): void {
   `);
 }
 
-export default db;
+export { db };

@@ -1,38 +1,40 @@
 import { v4 as uuidv4 } from 'uuid';
-import db from './database';
+import { db } from './database';
 import { User } from '../types';
 
-export function createUser(email: string, hashedPassword: string): User {
-  const id = uuidv4();
-  const now = new Date().toISOString();
+export const userRepository = {
+  findByEmail(email: string): User | undefined {
+    const stmt = db.prepare('SELECT * FROM users WHERE email = ?');
+    return stmt.get(email) as User | undefined;
+  },
 
-  const stmt = db.prepare(`
-    INSERT INTO users (id, email, password, createdAt, updatedAt)
-    VALUES (?, ?, ?, ?, ?)
-  `);
+  findById(id: string): User | undefined {
+    const stmt = db.prepare('SELECT * FROM users WHERE id = ?');
+    return stmt.get(id) as User | undefined;
+  },
 
-  stmt.run(id, email, hashedPassword, now, now);
+  create(email: string, hashedPassword: string): User {
+    const id = uuidv4();
+    const now = new Date().toISOString();
 
-  return {
-    id,
-    email,
-    password: hashedPassword,
-    createdAt: now,
-    updatedAt: now,
-  };
-}
+    const stmt = db.prepare(`
+      INSERT INTO users (id, email, password, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?)
+    `);
 
-export function findUserByEmail(email: string): User | undefined {
-  const stmt = db.prepare('SELECT * FROM users WHERE email = ?');
-  return stmt.get(email) as User | undefined;
-}
+    stmt.run(id, email, hashedPassword, now, now);
 
-export function findUserById(id: string): User | undefined {
-  const stmt = db.prepare('SELECT * FROM users WHERE id = ?');
-  return stmt.get(id) as User | undefined;
-}
+    return {
+      id,
+      email,
+      password: hashedPassword,
+      createdAt: now,
+      updatedAt: now,
+    };
+  },
 
-export function emailExists(email: string): boolean {
-  const stmt = db.prepare('SELECT 1 FROM users WHERE email = ?');
-  return stmt.get(email) !== undefined;
-}
+  exists(email: string): boolean {
+    const stmt = db.prepare('SELECT 1 FROM users WHERE email = ?');
+    return stmt.get(email) !== undefined;
+  },
+};
