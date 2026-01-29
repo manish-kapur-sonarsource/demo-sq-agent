@@ -61,10 +61,10 @@ export const taskRepository = {
     const updatedTask: Task = {
       ...existingTask,
       title: input.title ?? existingTask.title,
-      description: input.description !== undefined ? input.description : existingTask.description,
+      description: input.description === undefined ? existingTask.description : input.description,
       status: input.status ?? existingTask.status,
       priority: input.priority ?? existingTask.priority,
-      dueDate: input.dueDate !== undefined ? input.dueDate : existingTask.dueDate,
+      dueDate: input.dueDate === undefined ? existingTask.dueDate : input.dueDate,
       updatedAt: now,
     };
 
