@@ -1,86 +1,94 @@
+import { v4 as uuidv4 } from 'uuid';
 import db from './database';
-import { Task, CreateTaskInput, UpdateTaskInput } from '../types';
+import { Task, TaskStatus, TaskPriority } from '../types';
+import { CreateTaskInput, UpdateTaskInput } from '../utils/validation';
 
 export const taskRepository = {
-  findAllByUserId(userId: number): Task[] {
+  findAllByUserId(userId: string): Task[] {
     const stmt = db.prepare('SELECT * FROM tasks WHERE userId = ? ORDER BY createdAt DESC');
     return stmt.all(userId) as Task[];
   },
 
-  findById(id: number): Task | undefined {
+  findById(id: string): Task | undefined {
     const stmt = db.prepare('SELECT * FROM tasks WHERE id = ?');
     return stmt.get(id) as Task | undefined;
   },
 
-  findByIdAndUserId(id: number, userId: number): Task | undefined {
+  findByIdAndUserId(id: string, userId: string): Task | undefined {
     const stmt = db.prepare('SELECT * FROM tasks WHERE id = ? AND userId = ?');
     return stmt.get(id, userId) as Task | undefined;
   },
 
-  create(userId: number, data: CreateTaskInput): Task {
+  create(input: CreateTaskInput, userId: string): Task {
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    
     const stmt = db.prepare(`
-      INSERT INTO tasks (title, description, status, priority, dueDate, userId)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO tasks (id, title, description, status, priority, dueDate, userId, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    const result = stmt.run(
-      data.title,
-      data.description || null,
-      data.status || 'pending',
-      data.priority || 'medium',
-      data.dueDate || null,
-      userId
+    
+    stmt.run(
+      id,
+      input.title,
+      input.description || null,
+      input.status || 'pending',
+      input.priority || 'medium',
+      input.dueDate || null,
+      userId,
+      now,
+      now
     );
-    return this.findById(result.lastInsertRowid as number)!;
+    
+    return {
+      id,
+      title: input.title,
+      description: input.description || null,
+      status: (input.status || 'pending') as TaskStatus,
+      priority: (input.priority || 'medium') as TaskPriority,
+      dueDate: input.dueDate || null,
+      userId,
+      createdAt: now,
+      updatedAt: now,
+    };
   },
 
-  update(id: number, userId: number, data: UpdateTaskInput): Task | undefined {
+  update(id: string, userId: string, input: UpdateTaskInput): Task | undefined {
     const existingTask = this.findByIdAndUserId(id, userId);
-    if (!existingTask) {
-      return undefined;
-    }
+    if (!existingTask) return undefined;
 
-    const updates: string[] = [];
-    const values: (string | number | null)[] = [];
-
-    if (data.title !== undefined) {
-      updates.push('title = ?');
-      values.push(data.title);
-    }
-    if (data.description !== undefined) {
-      updates.push('description = ?');
-      values.push(data.description || null);
-    }
-    if (data.status !== undefined) {
-      updates.push('status = ?');
-      values.push(data.status);
-    }
-    if (data.priority !== undefined) {
-      updates.push('priority = ?');
-      values.push(data.priority);
-    }
-    if (data.dueDate !== undefined) {
-      updates.push('dueDate = ?');
-      values.push(data.dueDate || null);
-    }
-
-    if (updates.length === 0) {
-      return existingTask;
-    }
-
-    updates.push("updatedAt = datetime('now')");
-    values.push(id, userId);
+    const now = new Date().toISOString();
+    const updatedTask: Task = {
+      ...existingTask,
+      title: input.title ?? existingTask.title,
+      description: input.description !== undefined ? input.description : existingTask.description,
+      status: input.status ?? existingTask.status,
+      priority: input.priority ?? existingTask.priority,
+      dueDate: input.dueDate !== undefined ? input.dueDate : existingTask.dueDate,
+      updatedAt: now,
+    };
 
     const stmt = db.prepare(`
       UPDATE tasks 
-      SET ${updates.join(', ')}
+      SET title = ?, description = ?, status = ?, priority = ?, dueDate = ?, updatedAt = ?
       WHERE id = ? AND userId = ?
     `);
-    stmt.run(...values);
+    
+    stmt.run(
+      updatedTask.title,
+      updatedTask.description,
+      updatedTask.status,
+      updatedTask.priority,
+      updatedTask.dueDate,
+      updatedTask.updatedAt,
+      id,
+      userId
+    );
 
-    return this.findByIdAndUserId(id, userId);
+    return updatedTask;
   },
 
-  delete(id: number, userId: number): boolean {
+  delete(id: string, userId: string): boolean {
     const stmt = db.prepare('DELETE FROM tasks WHERE id = ? AND userId = ?');
     const result = stmt.run(id, userId);
     return result.changes > 0;

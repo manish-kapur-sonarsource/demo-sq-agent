@@ -1,10 +1,9 @@
 import { Router, Response, NextFunction } from 'express';
-import { taskRepository } from '../db/taskRepository';
 import { authMiddleware } from '../middleware/auth';
-import { validate } from '../middleware/validate';
-import { createTaskSchema, updateTaskSchema, taskIdSchema } from '../utils/validation';
-import { NotFoundError, ForbiddenError } from '../utils/errors';
-import { AuthenticatedRequest, ApiResponse, CreateTaskInput, UpdateTaskInput } from '../types';
+import { taskRepository } from '../db/taskRepository';
+import { createTaskSchema, updateTaskSchema } from '../utils/validation';
+import { NotFoundError, BadRequestError } from '../utils/errors';
+import { AuthenticatedRequest, ApiResponse, Task } from '../types';
 
 const router = Router();
 
@@ -12,14 +11,14 @@ router.use(authMiddleware);
 
 router.get(
   '/',
-  (req: AuthenticatedRequest, res: Response<ApiResponse>, next: NextFunction): void => {
+  (req: AuthenticatedRequest, res: Response<ApiResponse<Task[]>>, next: NextFunction) => {
     try {
       const userId = req.user!.userId;
       const tasks = taskRepository.findAllByUserId(userId);
 
       res.json({
         success: true,
-        data: { tasks },
+        data: tasks,
       });
     } catch (error) {
       next(error);
@@ -29,16 +28,15 @@ router.get(
 
 router.post(
   '/',
-  validate(createTaskSchema),
-  (req: AuthenticatedRequest, res: Response<ApiResponse>, next: NextFunction): void => {
+  (req: AuthenticatedRequest, res: Response<ApiResponse<Task>>, next: NextFunction) => {
     try {
       const userId = req.user!.userId;
-      const taskData: CreateTaskInput = req.body;
-      const task = taskRepository.create(userId, taskData);
+      const input = createTaskSchema.parse(req.body);
+      const task = taskRepository.create(input, userId);
 
       res.status(201).json({
         success: true,
-        data: { task },
+        data: task,
         message: 'Task created successfully',
       });
     } catch (error) {
@@ -49,28 +47,25 @@ router.post(
 
 router.put(
   '/:id',
-  validate(taskIdSchema, 'params'),
-  validate(updateTaskSchema),
-  (req: AuthenticatedRequest, res: Response<ApiResponse>, next: NextFunction): void => {
+  (req: AuthenticatedRequest, res: Response<ApiResponse<Task>>, next: NextFunction) => {
     try {
       const userId = req.user!.userId;
-      const taskId = parseInt(req.params.id, 10);
-      const updateData: UpdateTaskInput = req.body;
+      const { id } = req.params;
 
-      const existingTask = taskRepository.findById(taskId);
-      if (!existingTask) {
+      if (!id) {
+        throw new BadRequestError('Task ID is required');
+      }
+
+      const input = updateTaskSchema.parse(req.body);
+      const task = taskRepository.update(id, userId, input);
+
+      if (!task) {
         throw new NotFoundError('Task not found');
       }
 
-      if (existingTask.userId !== userId) {
-        throw new ForbiddenError('You do not have permission to update this task');
-      }
-
-      const updatedTask = taskRepository.update(taskId, userId, updateData);
-
       res.json({
         success: true,
-        data: { task: updatedTask },
+        data: task,
         message: 'Task updated successfully',
       });
     } catch (error) {
@@ -81,22 +76,20 @@ router.put(
 
 router.delete(
   '/:id',
-  validate(taskIdSchema, 'params'),
-  (req: AuthenticatedRequest, res: Response<ApiResponse>, next: NextFunction): void => {
+  (req: AuthenticatedRequest, res: Response<ApiResponse>, next: NextFunction) => {
     try {
       const userId = req.user!.userId;
-      const taskId = parseInt(req.params.id, 10);
+      const { id } = req.params;
 
-      const existingTask = taskRepository.findById(taskId);
-      if (!existingTask) {
+      if (!id) {
+        throw new BadRequestError('Task ID is required');
+      }
+
+      const deleted = taskRepository.delete(id, userId);
+
+      if (!deleted) {
         throw new NotFoundError('Task not found');
       }
-
-      if (existingTask.userId !== userId) {
-        throw new ForbiddenError('You do not have permission to delete this task');
-      }
-
-      taskRepository.delete(taskId, userId);
 
       res.json({
         success: true,

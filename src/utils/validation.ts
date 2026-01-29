@@ -12,7 +12,7 @@ export const loginSchema = z.object({
 
 export const createTaskSchema = z.object({
   title: z.string().min(1, 'Title is required').max(255, 'Title too long'),
-  description: z.string().max(1000, 'Description too long').optional(),
+  description: z.string().max(1000, 'Description too long').optional().nullable(),
   status: z.enum(['pending', 'completed']).default('pending'),
   priority: z.enum(['low', 'medium', 'high']).default('medium'),
   dueDate: z.string().datetime().optional().nullable(),
@@ -26,6 +26,7 @@ export const updateTaskSchema = z.object({
   dueDate: z.string().datetime().optional().nullable(),
 });
 
-export const taskIdSchema = z.object({
-  id: z.string().regex(/^\d+$/, 'Invalid task ID').transform(Number),
-});
+export type RegisterInput = z.infer<typeof registerSchema>;
+export type LoginInput = z.infer<typeof loginSchema>;
+export type CreateTaskInput = z.infer<typeof createTaskSchema>;
+export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;

@@ -1,10 +1,6 @@
+import { v4 as uuidv4 } from 'uuid';
 import db from './database';
 import { User } from '../types';
-
-export interface CreateUserData {
-  email: string;
-  password: string;
-}
 
 export const userRepository = {
   findByEmail(email: string): User | undefined {
@@ -12,22 +8,28 @@ export const userRepository = {
     return stmt.get(email) as User | undefined;
   },
 
-  findById(id: number): User | undefined {
+  findById(id: string): User | undefined {
     const stmt = db.prepare('SELECT * FROM users WHERE id = ?');
     return stmt.get(id) as User | undefined;
   },
 
-  create(data: CreateUserData): User {
+  create(email: string, hashedPassword: string): User {
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    
     const stmt = db.prepare(`
-      INSERT INTO users (email, password)
-      VALUES (?, ?)
+      INSERT INTO users (id, email, password, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?)
     `);
-    const result = stmt.run(data.email, data.password);
-    return this.findById(result.lastInsertRowid as number)!;
-  },
-
-  emailExists(email: string): boolean {
-    const stmt = db.prepare('SELECT 1 FROM users WHERE email = ?');
-    return stmt.get(email) !== undefined;
+    
+    stmt.run(id, email, hashedPassword, now, now);
+    
+    return {
+      id,
+      email,
+      password: hashedPassword,
+      createdAt: now,
+      updatedAt: now,
+    };
   },
 };
