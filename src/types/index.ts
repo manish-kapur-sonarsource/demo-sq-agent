@@ -1,5 +1,8 @@
 import { Request } from 'express';
 
+export type TaskStatus = 'pending' | 'completed';
+export type TaskPriority = 'low' | 'medium' | 'high';
+
 export interface User {
   id: number;
   email: string;
@@ -7,9 +10,6 @@ export interface User {
   createdAt: string;
   updatedAt: string;
 }
-
-export type TaskStatus = 'pending' | 'completed';
-export type TaskPriority = 'low' | 'medium' | 'high';
 
 export interface Task {
   id: number;
@@ -32,9 +32,35 @@ export interface AuthenticatedRequest extends Request {
   user?: JwtPayload;
 }
 
+export interface CreateTaskInput {
+  title: string;
+  description?: string;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  dueDate?: string;
+}
+
+export interface UpdateTaskInput {
+  title?: string;
+  description?: string;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  dueDate?: string;
+}
+
+export interface RegisterInput {
+  email: string;
+  password: string;
+}
+
+export interface LoginInput {
+  email: string;
+  password: string;
+}
+
 export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   message?: string;
-  errors?: string[];
+  error?: string;
 }

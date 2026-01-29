@@ -1,6 +1,5 @@
 import db from './database';
-import { Task } from '../types';
-import { CreateTaskInput, UpdateTaskInput } from '../utils/validation';
+import { Task, CreateTaskInput, UpdateTaskInput } from '../types';
 
 export const taskRepository = {
   findAllByUserId(userId: number): Task[] {
@@ -25,18 +24,20 @@ export const taskRepository = {
     `);
     const result = stmt.run(
       data.title,
-      data.description ?? null,
-      data.status ?? 'pending',
-      data.priority ?? 'medium',
-      data.dueDate ?? null,
+      data.description || null,
+      data.status || 'pending',
+      data.priority || 'medium',
+      data.dueDate || null,
       userId
     );
-    return this.findById(result.lastInsertRowid as number) as Task;
+    return this.findById(result.lastInsertRowid as number)!;
   },
 
   update(id: number, userId: number, data: UpdateTaskInput): Task | undefined {
-    const existing = this.findByIdAndUserId(id, userId);
-    if (!existing) return undefined;
+    const existingTask = this.findByIdAndUserId(id, userId);
+    if (!existingTask) {
+      return undefined;
+    }
 
     const updates: string[] = [];
     const values: (string | number | null)[] = [];
@@ -47,7 +48,7 @@ export const taskRepository = {
     }
     if (data.description !== undefined) {
       updates.push('description = ?');
-      values.push(data.description);
+      values.push(data.description || null);
     }
     if (data.status !== undefined) {
       updates.push('status = ?');
@@ -59,11 +60,11 @@ export const taskRepository = {
     }
     if (data.dueDate !== undefined) {
       updates.push('dueDate = ?');
-      values.push(data.dueDate);
+      values.push(data.dueDate || null);
     }
 
     if (updates.length === 0) {
-      return existing;
+      return existingTask;
     }
 
     updates.push("updatedAt = datetime('now')");

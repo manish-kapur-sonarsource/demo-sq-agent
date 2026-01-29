@@ -2,48 +2,41 @@ import { Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { AuthenticatedRequest, JwtPayload } from '../types';
 import { config } from '../utils/config';
+import { UnauthorizedError } from '../utils/errors';
 
 export function authMiddleware(
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
 ): void {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader) {
-    res.status(401).json({
-      success: false,
-      message: 'Authorization header is required',
-    });
-    return;
-  }
-
-  const parts = authHeader.split(' ');
-  if (parts.length !== 2 || parts[0] !== 'Bearer') {
-    res.status(401).json({
-      success: false,
-      message: 'Authorization header must be in format: Bearer <token>',
-    });
-    return;
-  }
-
-  const token = parts[1];
-
   try {
-    const decoded = jwt.verify(token, config.jwtSecret) as JwtPayload;
-    req.user = decoded;
-    next();
-  } catch (error) {
-    if (error instanceof jwt.TokenExpiredError) {
-      res.status(401).json({
-        success: false,
-        message: 'Token has expired',
-      });
-      return;
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader) {
+      throw new UnauthorizedError('No authorization header provided');
     }
-    res.status(401).json({
-      success: false,
-      message: 'Invalid token',
-    });
+
+    const parts = authHeader.split(' ');
+    if (parts.length !== 2 || parts[0] !== 'Bearer') {
+      throw new UnauthorizedError('Invalid authorization header format');
+    }
+
+    const token = parts[1];
+
+    try {
+      const decoded = jwt.verify(token, config.jwtSecret) as JwtPayload;
+      req.user = decoded;
+      next();
+    } catch (jwtError) {
+      if (jwtError instanceof jwt.TokenExpiredError) {
+        throw new UnauthorizedError('Token has expired');
+      }
+      if (jwtError instanceof jwt.JsonWebTokenError) {
+        throw new UnauthorizedError('Invalid token');
+      }
+      throw jwtError;
+    }
+  } catch (error) {
+    next(error);
   }
 }

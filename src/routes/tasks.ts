@@ -1,9 +1,10 @@
 import { Router, Response, NextFunction } from 'express';
 import { taskRepository } from '../db/taskRepository';
-import { createTaskSchema, updateTaskSchema } from '../utils/validation';
 import { authMiddleware } from '../middleware/auth';
-import { AppError } from '../middleware/errorHandler';
-import { AuthenticatedRequest } from '../types';
+import { validate } from '../middleware/validate';
+import { createTaskSchema, updateTaskSchema, taskIdSchema } from '../utils/validation';
+import { NotFoundError, ForbiddenError } from '../utils/errors';
+import { AuthenticatedRequest, ApiResponse, CreateTaskInput, UpdateTaskInput } from '../types';
 
 const router = Router();
 
@@ -11,14 +12,14 @@ router.use(authMiddleware);
 
 router.get(
   '/',
-  (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+  (req: AuthenticatedRequest, res: Response<ApiResponse>, next: NextFunction): void => {
     try {
       const userId = req.user!.userId;
       const tasks = taskRepository.findAllByUserId(userId);
 
       res.json({
         success: true,
-        data: tasks,
+        data: { tasks },
       });
     } catch (error) {
       next(error);
@@ -28,15 +29,16 @@ router.get(
 
 router.post(
   '/',
-  (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+  validate(createTaskSchema),
+  (req: AuthenticatedRequest, res: Response<ApiResponse>, next: NextFunction): void => {
     try {
       const userId = req.user!.userId;
-      const data = createTaskSchema.parse(req.body);
-      const task = taskRepository.create(userId, data);
+      const taskData: CreateTaskInput = req.body;
+      const task = taskRepository.create(userId, taskData);
 
       res.status(201).json({
         success: true,
-        data: task,
+        data: { task },
         message: 'Task created successfully',
       });
     } catch (error) {
@@ -47,26 +49,28 @@ router.post(
 
 router.put(
   '/:id',
-  (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+  validate(taskIdSchema, 'params'),
+  validate(updateTaskSchema),
+  (req: AuthenticatedRequest, res: Response<ApiResponse>, next: NextFunction): void => {
     try {
       const userId = req.user!.userId;
       const taskId = parseInt(req.params.id, 10);
+      const updateData: UpdateTaskInput = req.body;
 
-      if (isNaN(taskId)) {
-        throw new AppError(400, 'Invalid task ID');
-      }
-
-      const existingTask = taskRepository.findByIdAndUserId(taskId, userId);
+      const existingTask = taskRepository.findById(taskId);
       if (!existingTask) {
-        throw new AppError(404, 'Task not found');
+        throw new NotFoundError('Task not found');
       }
 
-      const data = updateTaskSchema.parse(req.body);
-      const task = taskRepository.update(taskId, userId, data);
+      if (existingTask.userId !== userId) {
+        throw new ForbiddenError('You do not have permission to update this task');
+      }
+
+      const updatedTask = taskRepository.update(taskId, userId, updateData);
 
       res.json({
         success: true,
-        data: task,
+        data: { task: updatedTask },
         message: 'Task updated successfully',
       });
     } catch (error) {
@@ -77,19 +81,22 @@ router.put(
 
 router.delete(
   '/:id',
-  (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+  validate(taskIdSchema, 'params'),
+  (req: AuthenticatedRequest, res: Response<ApiResponse>, next: NextFunction): void => {
     try {
       const userId = req.user!.userId;
       const taskId = parseInt(req.params.id, 10);
 
-      if (isNaN(taskId)) {
-        throw new AppError(400, 'Invalid task ID');
+      const existingTask = taskRepository.findById(taskId);
+      if (!existingTask) {
+        throw new NotFoundError('Task not found');
       }
 
-      const deleted = taskRepository.delete(taskId, userId);
-      if (!deleted) {
-        throw new AppError(404, 'Task not found');
+      if (existingTask.userId !== userId) {
+        throw new ForbiddenError('You do not have permission to delete this task');
       }
+
+      taskRepository.delete(taskId, userId);
 
       res.json({
         success: true,

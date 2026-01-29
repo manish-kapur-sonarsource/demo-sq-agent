@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { config } from '../utils/config';
 
-const db = new Database(config.dbPath);
+const db = new Database(config.databasePath);
 
 db.pragma('journal_mode = WAL');
 
@@ -29,7 +29,8 @@ export function initializeDatabase(): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_tasks_userId ON tasks(userId);
-    CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+    CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+    CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority);
   `);
 }
 

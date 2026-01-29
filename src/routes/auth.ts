@@ -2,26 +2,27 @@ import { Router, Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { userRepository } from '../db/userRepository';
-import { registerSchema, loginSchema } from '../utils/validation';
 import { config } from '../utils/config';
-import { AppError } from '../middleware/errorHandler';
-import { JwtPayload } from '../types';
+import { registerSchema, loginSchema } from '../utils/validation';
+import { validate } from '../middleware/validate';
+import { ConflictError, UnauthorizedError } from '../utils/errors';
+import { ApiResponse, RegisterInput, LoginInput, JwtPayload } from '../types';
 
 const router = Router();
 
 router.post(
   '/register',
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  validate(registerSchema),
+  async (req: Request<object, ApiResponse, RegisterInput>, res: Response<ApiResponse>, next: NextFunction): Promise<void> => {
     try {
-      const data = registerSchema.parse(req.body);
+      const { email, password } = req.body;
 
-      const existingUser = userRepository.findByEmail(data.email);
-      if (existingUser) {
-        throw new AppError(409, 'User with this email already exists');
+      if (userRepository.emailExists(email)) {
+        throw new ConflictError('Email already registered');
       }
 
-      const hashedPassword = await bcrypt.hash(data.password, config.bcryptRounds);
-      const user = userRepository.create(data.email, hashedPassword);
+      const hashedPassword = await bcrypt.hash(password, config.bcryptSaltRounds);
+      const user = userRepository.create({ email, password: hashedPassword });
 
       const payload: JwtPayload = { userId: user.id, email: user.email };
       const token = jwt.sign(payload, config.jwtSecret, {
@@ -48,18 +49,19 @@ router.post(
 
 router.post(
   '/login',
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  validate(loginSchema),
+  async (req: Request<object, ApiResponse, LoginInput>, res: Response<ApiResponse>, next: NextFunction): Promise<void> => {
     try {
-      const data = loginSchema.parse(req.body);
+      const { email, password } = req.body;
 
-      const user = userRepository.findByEmail(data.email);
+      const user = userRepository.findByEmail(email);
       if (!user) {
-        throw new AppError(401, 'Invalid email or password');
+        throw new UnauthorizedError('Invalid email or password');
       }
 
-      const isValidPassword = await bcrypt.compare(data.password, user.password);
-      if (!isValidPassword) {
-        throw new AppError(401, 'Invalid email or password');
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+      if (!isPasswordValid) {
+        throw new UnauthorizedError('Invalid email or password');
       }
 
       const payload: JwtPayload = { userId: user.id, email: user.email };
