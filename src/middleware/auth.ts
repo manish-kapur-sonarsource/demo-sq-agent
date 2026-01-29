@@ -1,39 +1,41 @@
 import { Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-import { config } from '../utils/config';
-import { AuthenticatedRequest, JwtPayload } from '../types';
-import { UnauthorizedError } from '../utils/errors';
+import { verifyToken } from '../utils/jwt';
+import { AuthenticatedRequest, ApiResponse } from '../types';
 
-export const authMiddleware = (
+export function authMiddleware(
   req: AuthenticatedRequest,
-  _res: Response,
+  res: Response<ApiResponse>,
   next: NextFunction
-): void => {
+): void {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    res.status(401).json({
+      success: false,
+      error: 'Authorization header missing',
+    });
+    return;
+  }
+
+  const parts = authHeader.split(' ');
+  if (parts.length !== 2 || parts[0] !== 'Bearer') {
+    res.status(401).json({
+      success: false,
+      error: 'Invalid authorization format. Use: Bearer <token>',
+    });
+    return;
+  }
+
+  const token = parts[1];
+
   try {
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader) {
-      throw new UnauthorizedError('No authorization header provided');
-    }
-
-    const parts = authHeader.split(' ');
-    if (parts.length !== 2 || parts[0] !== 'Bearer') {
-      throw new UnauthorizedError('Invalid authorization header format');
-    }
-
-    const token = parts[1];
-
-    const decoded = jwt.verify(token, config.jwtSecret) as JwtPayload;
-    req.user = decoded;
-
+    const payload = verifyToken(token);
+    req.user = payload;
     next();
   } catch (error) {
-    if (error instanceof jwt.JsonWebTokenError) {
-      next(new UnauthorizedError('Invalid token'));
-    } else if (error instanceof jwt.TokenExpiredError) {
-      next(new UnauthorizedError('Token expired'));
-    } else {
-      next(error);
-    }
+    res.status(401).json({
+      success: false,
+      error: 'Invalid or expired token',
+    });
   }
-};
+}

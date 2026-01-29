@@ -1,16 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 
-export function requestLogger(
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void {
+export function requestLogger(req: Request, res: Response, next: NextFunction): void {
   const start = Date.now();
+  const timestamp = new Date().toISOString();
 
   res.on('finish', () => {
     const duration = Date.now() - start;
-    const logMessage = `[${new Date().toISOString()}] ${req.method} ${req.originalUrl} ${res.statusCode} - ${duration}ms`;
-    console.log(logMessage);
+    const logLine = `[${timestamp}] ${req.method} ${req.originalUrl} ${res.statusCode} ${duration}ms`;
+    console.log(logLine);
   });
 
   next();

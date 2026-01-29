@@ -1,15 +1,24 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
-import { AppError } from '../utils/errors';
 import { ApiResponse } from '../types';
 
-export const errorHandler = (
+export class AppError extends Error {
+  constructor(
+    public statusCode: number,
+    public message: string
+  ) {
+    super(message);
+    this.name = 'AppError';
+  }
+}
+
+export function errorHandler(
   err: Error,
   _req: Request,
   res: Response<ApiResponse>,
   _next: NextFunction
-): void => {
-  console.error('Error:', err);
+): void {
+  console.error(`[ERROR] ${new Date().toISOString()} - ${err.message}`);
 
   if (err instanceof ZodError) {
     const messages = err.errors.map((e) => `${e.path.join('.')}: ${e.message}`);
@@ -29,8 +38,16 @@ export const errorHandler = (
     return;
   }
 
+  if (err.message.includes('UNIQUE constraint failed')) {
+    res.status(409).json({
+      success: false,
+      error: 'Resource already exists',
+    });
+    return;
+  }
+
   res.status(500).json({
     success: false,
     error: 'Internal server error',
   });
-};
+}

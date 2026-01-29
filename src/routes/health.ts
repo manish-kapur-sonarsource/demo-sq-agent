@@ -3,7 +3,7 @@ import { ApiResponse } from '../types';
 
 const router = Router();
 
-router.get('/', (_req: Request, res: Response<ApiResponse>) => {
+router.get('/', (_req: Request, res: Response<ApiResponse>): void => {
   res.json({
     success: true,
     data: {
