@@ -2,30 +2,31 @@ import { Router, Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { userRepository } from '../db/userRepository';
-import { config } from '../utils/config';
 import { registerSchema, loginSchema } from '../utils/validation';
-import { validate } from '../middleware/validate';
-import { ConflictError, UnauthorizedError } from '../utils/errors';
-import { ApiResponse, JwtPayload } from '../types';
+import { config } from '../utils/config';
+import { AppError } from '../middleware/errorHandler';
+import { JwtPayload } from '../types';
 
 const router = Router();
 
 router.post(
   '/register',
-  validate(registerSchema),
-  async (req: Request, res: Response<ApiResponse>, next: NextFunction): Promise<void> => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { email, password } = req.body;
+      const data = registerSchema.parse(req.body);
 
-      if (userRepository.exists(email)) {
-        throw new ConflictError('Email already registered');
+      const existingUser = userRepository.findByEmail(data.email);
+      if (existingUser) {
+        throw new AppError(409, 'User with this email already exists');
       }
 
-      const hashedPassword = await bcrypt.hash(password, config.bcryptSaltRounds);
-      const user = userRepository.create(email, hashedPassword);
+      const hashedPassword = await bcrypt.hash(data.password, config.bcryptRounds);
+      const user = userRepository.create(data.email, hashedPassword);
 
       const payload: JwtPayload = { userId: user.id, email: user.email };
-      const token = jwt.sign(payload, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
+      const token = jwt.sign(payload, config.jwtSecret, {
+        expiresIn: config.jwtExpiresIn,
+      });
 
       res.status(201).json({
         success: true,
@@ -47,23 +48,24 @@ router.post(
 
 router.post(
   '/login',
-  validate(loginSchema),
-  async (req: Request, res: Response<ApiResponse>, next: NextFunction): Promise<void> => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { email, password } = req.body;
+      const data = loginSchema.parse(req.body);
 
-      const user = userRepository.findByEmail(email);
+      const user = userRepository.findByEmail(data.email);
       if (!user) {
-        throw new UnauthorizedError('Invalid email or password');
+        throw new AppError(401, 'Invalid email or password');
       }
 
-      const isValidPassword = await bcrypt.compare(password, user.password);
+      const isValidPassword = await bcrypt.compare(data.password, user.password);
       if (!isValidPassword) {
-        throw new UnauthorizedError('Invalid email or password');
+        throw new AppError(401, 'Invalid email or password');
       }
 
       const payload: JwtPayload = { userId: user.id, email: user.email };
-      const token = jwt.sign(payload, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
+      const token = jwt.sign(payload, config.jwtSecret, {
+        expiresIn: config.jwtExpiresIn,
+      });
 
       res.json({
         success: true,

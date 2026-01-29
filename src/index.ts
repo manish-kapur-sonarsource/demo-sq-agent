@@ -1,9 +1,9 @@
 import express from 'express';
 import { config } from './utils/config';
 import { initializeDatabase } from './db/database';
-import { requestLogger } from './middleware/requestLogger';
-import { rateLimiter } from './middleware/rateLimiter';
+import { requestLogger } from './middleware/logger';
 import { errorHandler } from './middleware/errorHandler';
+import { rateLimiter } from './middleware/rateLimit';
 import authRoutes from './routes/auth';
 import taskRoutes from './routes/tasks';
 import healthRoutes from './routes/health';
@@ -23,7 +23,7 @@ app.use(errorHandler);
 initializeDatabase();
 
 app.listen(config.port, () => {
-  console.log(`Server running on port ${config.port}`);
+  console.log(`Server is running on port ${config.port}`);
   console.log(`Health check: http://localhost:${config.port}/health`);
 });
 

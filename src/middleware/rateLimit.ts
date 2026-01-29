@@ -3,10 +3,10 @@ import { config } from '../utils/config';
 
 export const rateLimiter = rateLimit({
   windowMs: config.rateLimit.windowMs,
-  max: config.rateLimit.max,
+  max: config.rateLimit.maxRequests,
   message: {
     success: false,
-    error: 'Too many requests, please try again later',
+    message: 'Too many requests, please try again later',
   },
   standardHeaders: true,
   legacyHeaders: false,
