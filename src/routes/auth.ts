@@ -1,40 +1,32 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { createUser, getUserByEmail } from '../db/userRepository';
-import { registerSchema, loginSchema } from '../utils/validation';
+import { userRepository } from '../db/userRepository';
 import { config } from '../utils/config';
-import { AppError } from '../middleware/errorHandler';
-import { JwtPayload } from '../types';
+import { registerSchema, loginSchema } from '../utils/validation';
+import { validateBody } from '../middleware/validate';
+import { BadRequestError, ConflictError, UnauthorizedError } from '../utils/errors';
+import { ApiResponse, JwtPayload, RegisterInput, LoginInput } from '../types';
 
 const router = Router();
 
 router.post(
   '/register',
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  validateBody(registerSchema),
+  async (req: Request<object, ApiResponse, RegisterInput>, res: Response<ApiResponse>, next: NextFunction) => {
     try {
-      const validatedData = registerSchema.parse(req.body);
-      
-      const existingUser = getUserByEmail(validatedData.email);
+      const { email, password } = req.body;
+
+      const existingUser = userRepository.findByEmail(email);
       if (existingUser) {
-        throw new AppError(409, 'User with this email already exists');
+        throw new ConflictError('User with this email already exists');
       }
 
-      const hashedPassword = await bcrypt.hash(
-        validatedData.password,
-        config.bcryptRounds
-      );
+      const hashedPassword = await bcrypt.hash(password, config.bcryptRounds);
+      const user = userRepository.create(email, hashedPassword);
 
-      const user = createUser(validatedData.email, hashedPassword);
-
-      const payload: JwtPayload = {
-        userId: user.id,
-        email: user.email,
-      };
-
-      const token = jwt.sign(payload, config.jwtSecret, {
-        expiresIn: config.jwtExpiresIn,
-      });
+      const payload: JwtPayload = { userId: user.id, email: user.email };
+      const token = jwt.sign(payload, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
 
       res.status(201).json({
         success: true,
@@ -56,32 +48,23 @@ router.post(
 
 router.post(
   '/login',
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  validateBody(loginSchema),
+  async (req: Request<object, ApiResponse, LoginInput>, res: Response<ApiResponse>, next: NextFunction) => {
     try {
-      const validatedData = loginSchema.parse(req.body);
+      const { email, password } = req.body;
 
-      const user = getUserByEmail(validatedData.email);
+      const user = userRepository.findByEmail(email);
       if (!user) {
-        throw new AppError(401, 'Invalid email or password');
+        throw new UnauthorizedError('Invalid email or password');
       }
 
-      const isPasswordValid = await bcrypt.compare(
-        validatedData.password,
-        user.password
-      );
-
-      if (!isPasswordValid) {
-        throw new AppError(401, 'Invalid email or password');
+      const isValidPassword = await bcrypt.compare(password, user.password);
+      if (!isValidPassword) {
+        throw new UnauthorizedError('Invalid email or password');
       }
 
-      const payload: JwtPayload = {
-        userId: user.id,
-        email: user.email,
-      };
-
-      const token = jwt.sign(payload, config.jwtSecret, {
-        expiresIn: config.jwtExpiresIn,
-      });
+      const payload: JwtPayload = { userId: user.id, email: user.email };
+      const token = jwt.sign(payload, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
 
       res.json({
         success: true,

@@ -1,24 +1,25 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
+import { AppError } from '../utils/errors';
+import { ApiResponse } from '../types';
 
-export class AppError extends Error {
-  constructor(
-    public statusCode: number,
-    message: string
-  ) {
-    super(message);
-    this.name = 'AppError';
-  }
-}
-
-export function errorHandler(
+export const errorHandler = (
   err: Error,
-  req: Request,
-  res: Response,
+  _req: Request,
+  res: Response<ApiResponse>,
   _next: NextFunction
-): void {
-  console.error(`[ERROR] ${new Date().toISOString()} - ${err.message}`);
-  console.error(err.stack);
+): void => {
+  console.error('Error:', err);
+
+  if (err instanceof ZodError) {
+    const messages = err.errors.map((e) => `${e.path.join('.')}: ${e.message}`);
+    res.status(400).json({
+      success: false,
+      error: 'Validation error',
+      message: messages.join(', '),
+    });
+    return;
+  }
 
   if (err instanceof AppError) {
     res.status(err.statusCode).json({
@@ -28,22 +29,8 @@ export function errorHandler(
     return;
   }
 
-  if (err instanceof ZodError) {
-    const errors = err.errors.map((e) => ({
-      field: e.path.join('.'),
-      message: e.message,
-    }));
-    
-    res.status(400).json({
-      success: false,
-      error: 'Validation failed',
-      details: errors,
-    });
-    return;
-  }
-
   res.status(500).json({
     success: false,
     error: 'Internal server error',
   });
-}
+};
